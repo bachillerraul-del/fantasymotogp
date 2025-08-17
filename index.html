@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fantasy MotoGP – GitHub Pages (offline)</title>
+<style>
+  :root{--panel:#1c1e24;--ink:#e9eef5;--muted:#9aa4b2}
+  *{box-sizing:border-box}
+  body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,Arial;background:#0f0f12;color:var(--ink);margin:0}
+  header{background:#16171c;padding:12px;position:sticky;top:0;z-index:10;border-bottom:1px solid #262833;text-align:center}
+  h1{margin:0;font-size:1.1rem}
+  .wrap{max-width:980px;margin:auto;padding:12px}
+  .panel{background:var(--panel);margin:10px 0;padding:12px;border-radius:12px;border:1px solid #2a2d37}
+  .btn{background:#2a2d37;color:#fff;border:none;padding:10px 14px;margin:2px;border-radius:8px;cursor:pointer}
+  .btn:disabled{opacity:.55;cursor:not-allowed}
+  .list{display:grid;grid-template-columns:1fr;gap:8px}
+  @media(min-width:760px){.list{grid-template-columns:1fr 1fr}}
+  .card{background:#22252f;padding:10px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;border:1px solid #343948}
+  .price{font-weight:bold}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  select,input[type="text"]{background:#161922;border:1px solid #2b3140;color:var(--ink);padding:8px 10px;border-radius:8px}
+  .muted{color:var(--muted);font-size:.9rem}
+  .progress{height:16px;background:#2a2d37;border-radius:999px;overflow:hidden;margin:8px 0;border:1px solid #373b46}
+  .progress-bar{height:100%;width:0%;transition:width .25s}
+  .slots{display:flex;gap:6px;margin:6px 0}
+  .slot{width:20px;height:20px;border-radius:50%;border:2px solid #666}
+  .slot.filled{background:#19d37e;border-color:#19d37e;box-shadow:0 0 0 2px rgba(25,211,126,.15)}
+  footer{opacity:.7;color:#b8c0cc;text-align:center;padding:18px}
+  .linkbox{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  input.sharelink{width:100%;max-width:520px}
+</style>
+</head>
+<body>
+<header><h1>Calculadora de Equipos – Fantasy MotoGP (GitHub Pages)</h1></header>
+<main class="wrap">
+  <div class="panel">
+    <div class="row" style="justify-content:space-between">
+      <div><b>Presupuesto:</b> 100 € – Máx 5 pilotos</div>
+      <div class="row">
+        <label>Ordenar:
+          <select id="orden">
+            <option value="precioDesc">Precio ↓</option>
+            <option value="precioAsc">Precio ↑</option>
+            <option value="nombreAsc">Nombre A–Z</option>
+          </select>
+        </label>
+        <input id="search" placeholder="Buscar piloto..." />
+      </div>
+    </div>
+    <div id="estado" class="muted" style="margin-top:6px"></div>
+    <div class="progress"><div id="progressBar" class="progress-bar"></div></div>
+    <div class="slots" id="slots"></div>
+    <div class="row" style="margin-top:6px">
+      <button class="btn" id="btnShare">Compartir WhatsApp</button>
+      <button class="btn" id="btnLink">Compartir enlace</button>
+      <button class="btn" id="btnImage">Guardar como Imagen</button>
+      <button class="btn" id="btnClear">Limpiar</button>
+      <span class="muted">Guardado en este dispositivo.</span>
+    </div>
+    <div class="linkbox" style="margin-top:6px">
+      <input class="sharelink" id="shareLink" readonly placeholder="Enlace de tu equipo (se generará al pulsar 'Compartir enlace')">
+      <button class="btn" id="btnCopyLink">Copiar enlace</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <b>Lista de pilotos</b> (<span id="contador">0</span>)
+    <div id="lista" class="list"></div>
+  </div>
+</main>
+
+<canvas id="canvas" style="display:none"></canvas>
+
+<footer>Porra Family · GitHub Pages · vGH-1</footer>
+
+<script>
+// ===== App local (sin Firebase) =====
+const PRESUPUESTO=100, MAX_PILOTOS=5;
+const PILOTOS=[
+  { nombre:"Marc Márquez", precio:56 },
+  { nombre:"Marco Bezzecchi", precio:33 },
+  { nombre:"Fermín Aldeguer", precio:21 },
+  { nombre:"Pedro Acosta", precio:20 },
+  { nombre:"Enea Bastianini", precio:18 },
+  { nombre:"Alex Márquez", precio:34 },
+  { nombre:"Brad Binder", precio:20 },
+  { nombre:"Joan Mir", precio:10 },
+  { nombre:"Francesco Bagnaia", precio:36 },
+  { nombre:"Ai Ogura", precio:15 },
+  { nombre:"Raul Fernández", precio:21 },
+  { nombre:"Franco Morbidelli", precio:23 },
+  { nombre:"Luca Marini", precio:19 },
+  { nombre:"Johann Zarco", precio:15 },
+  { nombre:"Jack Miller", precio:10 },
+  { nombre:"Fabio Di Giannantonio", precio:24 },
+  { nombre:"Fabio Quartararo", precio:21 },
+  { nombre:"Alex Rins", precio:13 },
+  { nombre:"Jorge Martín", precio:25 },
+  { nombre:"Miguel Oliveira", precio:10 },
+  { nombre:"Augusto Fernández", precio:11 },
+  { nombre:"Somkiat Chantra", precio:10 },
+  { nombre:"Maverick Viñales", precio:18 },
+  { nombre:"Lorenzo Savadori", precio:10 },
+  { nombre:"Pol Espargaró", precio:16 },
+  { nombre:"Taka Nakagami", precio:13 },
+  { nombre:"Aleix Espargaró", precio:13 }
+];
+let seleccion=new Set(JSON.parse(localStorage.getItem("equipo_motogp_sel")||"[]"));
+let orden="precioDesc";
+
+const $ = (s)=>document.querySelector(s);
+function eur(n){return n+" €";}
+function slug(s){return s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();}
+
+// Decodificar equipo desde URL (?t=...)
+(function restoreFromURL(){
+  const u=new URL(location.href);
+  const t=u.searchParams.get("t");
+  if(!t) return;
+  try{
+    const names = decodeURIComponent(t).split(",");
+    const set = new Set();
+    names.forEach(n=>{
+      const found = PILOTOS.find(p=>p.nombre===n);
+      if(found) set.add(found.nombre);
+    });
+    if(set.size>0){
+      seleccion=set;
+      persist();
+    }
+  }catch(e){ console.warn("No se pudo parsear equipo desde URL", e); }
+})();
+
+function renderLista(){
+  const q=slug($("#search").value||"");
+  let rows=PILOTOS.filter(p=>slug(p.nombre).includes(q));
+  if(orden==="precioAsc") rows.sort((a,b)=>a.precio-b.precio);
+  else if(orden==="precioDesc") rows.sort((a,b)=>b.precio-a.precio);
+  else rows.sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  $("#contador").innerText=rows.length;
+  const lista=$("#lista"); lista.innerHTML="";
+  rows.forEach(p=>{
+    const checked=seleccion.has(p.nombre);
+    const card=document.createElement("div");
+    card.className="card";
+    card.innerHTML=`<label><input type=checkbox ${checked?"checked":""} data-nombre="${p.nombre}" data-precio="${p.precio}"> ${p.nombre}</label><div class=price>${eur(p.precio)}</div>`;
+    lista.appendChild(card);
+  });
+  lista.querySelectorAll("input").forEach(chk=>chk.onchange=e=>{
+    const nom=e.target.dataset.nombre;
+    const val=Number(e.target.dataset.precio);
+    if(e.target.checked){
+      if(seleccion.size>=MAX_PILOTOS){alert("Máx 5 pilotos");e.target.checked=false;return;}
+      if(totalGastado()+val>PRESUPUESTO){alert("Presupuesto superado");e.target.checked=false;return;}
+      seleccion.add(nom);
+    }else seleccion.delete(nom);
+    persist(); renderEstado();
+  });
+  renderEstado();
+}
+function totalGastado(){let t=0;PILOTOS.forEach(p=>{if(seleccion.has(p.nombre))t+=p.precio});return t;}
+function renderEstado(){
+  const gast=totalGastado();const rest=PRESUPUESTO-gast;const c=seleccion.size;
+  $("#estado").innerText=`Gastado: ${eur(gast)} – Restante: ${eur(rest)} – Pilotos: ${c}/${MAX_PILOTOS}`;
+  const pct=Math.min(100,Math.round(gast/PRESUPUESTO*100));
+  const bar=document.getElementById("progressBar");
+  bar.style.width=pct+"%";
+  bar.style.background=gast>PRESUPUESTO?"#ff3b3b":pct>80?"#ffbd2e":"#19d37e";
+  const slots=document.getElementById("slots"); slots.innerHTML="";
+  for(let i=0;i<MAX_PILOTOS;i++){
+    const s=document.createElement("div");
+    s.className="slot"+(i<c?" filled":"");
+    slots.appendChild(s);
+  }
+}
+function persist(){localStorage.setItem("equipo_motogp_sel",JSON.stringify([...seleccion]));}
+document.getElementById("btnClear").onclick=()=>{seleccion.clear();persist();renderLista();}
+document.getElementById("btnShare").onclick=()=>{window.open("https://wa.me/?text="+encodeURIComponent(buildText()));}
+document.getElementById("btnImage").onclick=()=>{saveImagePro();}
+document.getElementById("orden").onchange=e=>{orden=e.target.value;renderLista();}
+document.getElementById("search").oninput=renderLista;
+
+document.getElementById("btnLink").onclick=()=>{
+  const url = buildShareURL();
+  const input = document.getElementById("shareLink");
+  input.value = url;
+  input.select();
+};
+document.getElementById("btnCopyLink").onclick=()=>{
+  const input = document.getElementById("shareLink");
+  if(!input.value) input.value = buildShareURL();
+  input.select();
+  document.execCommand("copy");
+  alert("🔗 Enlace copiado");
+};
+
+function buildText(){
+  const elegidos=PILOTOS.filter(p=>seleccion.has(p.nombre));const gast=totalGastado();
+  const rest=PRESUPUESTO-gast;const lista=elegidos.map(p=>"• "+p.nombre+" ("+eur(p.precio)+")").join("\n");
+  return "🏁 Mi equipo Fantasy MotoGP\n"+lista+"\n—\nTotal: "+eur(gast)+" · Restante: "+eur(rest)+"\n("+elegidos.length+"/"+MAX_PILOTOS+" pilotos)";
+}
+
+function buildShareURL(){
+  const elegidos=PILOTOS.filter(p=>seleccion.has(p.nombre));
+  const names = elegidos.map(p=>p.nombre).join(",");
+  const base = location.origin + location.pathname; // funciona en GitHub Pages
+  const url = base + "?t=" + encodeURIComponent(names);
+  return url;
+}
+
+// ===== Exportador PRO (fondo degradado + bandera) =====
+function saveImagePro(){
+  const elegidos=PILOTOS.filter(p=>seleccion.has(p.nombre));
+  const w=1000, header=140, cardH=64, gap=12, bottom=120;
+  const h = Math.max(420, header + gap + (elegidos.length* (cardH+gap)) + bottom);
+  const canvas=document.getElementById("canvas");canvas.width=w;canvas.height=h;
+  const ctx=canvas.getContext("2d");
+
+  const grad=ctx.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0,"#0b0c10");
+  grad.addColorStop(.55,"#14161c");
+  grad.addColorStop(1,"#1a0f12");
+  ctx.fillStyle=grad; ctx.fillRect(0,0,w,h);
+
+  ctx.save();
+  ctx.globalAlpha=0.06;
+  const cell=28;
+  for(let y=0;y<h;y+=cell){
+    for(let x=0;x<w;x+=cell){
+      if(((x/cell)+(y/cell))%2===0){
+        ctx.fillStyle="#ffffff";
+        ctx.fillRect(x,y,cell,cell);
+      }
+    }
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.fillStyle="rgba(255,45,45,0.12)";
+  ctx.beginPath();
+  ctx.moveTo(-100,60);
+  ctx.lineTo(w+100,-140);
+  ctx.lineTo(w+100,10);
+  ctx.lineTo(-100,210);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  drawCheckeredFlag(ctx, 36, 36, 80, 50);
+  ctx.fillStyle="#ffffff";
+  ctx.font="700 34px Arial";
+  ctx.fillText("Fantasy MotoGP", 140, 62);
+  ctx.font="500 20px Arial";
+  ctx.fillStyle="#d0d4db";
+  ctx.fillText("Mi equipo", 140, 92);
+
+  ctx.strokeStyle="rgba(255,255,255,0.12)";
+  ctx.lineWidth=2;
+  line(ctx, 24, 110, w-24, 110);
+
+  let y = header;
+  const xPad=28;
+  elegidos.forEach(p=>{
+    drawCard(ctx, xPad, y, w-xPad*2, cardH, "#20232b", "#33394a");
+    ctx.fillStyle="#ffffff";
+    ctx.font="600 22px Arial";
+    ctx.fillText(p.nombre, xPad+18, y+38);
+    ctx.fillStyle="#eaeef5";
+    ctx.font="600 20px Arial";
+    const price = p.precio + " €";
+    const tw = ctx.measureText(price).width;
+    ctx.fillText(price, w - xPad - 18 - tw, y+38);
+    y += cardH + gap;
+  });
+
+  const gast = elegidos.reduce((a,p)=>a+p.precio,0);
+  const rest = PRESUPUESTO - gast;
+  drawCard(ctx, xPad, h-92, w-xPad*2, 64, "#20232b", "#33394a");
+  ctx.font="700 22px Arial";
+  ctx.fillStyle="#ffffff";
+  ctx.fillText("Total gastado:", xPad+18, h-58);
+  ctx.fillStyle= gast>PRESUPUESTO ? "#ff5d5d" : "#19d37e";
+  ctx.fillText(gast+" €", xPad+190, h-58);
+  ctx.fillStyle="#d0d4db";
+  ctx.fillText("Restante:", xPad+350, h-58);
+  ctx.fillStyle= rest<0 ? "#ff5d5d" : "#eaeef5";
+  ctx.fillText(rest+" €", xPad+440, h-58);
+
+  ctx.fillStyle="#9aa3af";
+  ctx.font="500 16px Arial";
+  const ftxt = "Porra Family · GitHub Pages · " + new Date().toLocaleDateString();
+  ctx.fillText(ftxt, xPad+18, h-22);
+
+  const link=document.createElement("a");
+  link.download="equipo_motogp.png";
+  link.href=canvas.toDataURL("image/png");
+  link.click();
+}
+
+function drawCard(ctx, x, y, w, h, fill, border){
+  ctx.save();
+  ctx.shadowColor="rgba(0,0,0,0.35)";
+  ctx.shadowBlur=16;
+  ctx.shadowOffsetY=8;
+  roundRect(ctx, x, y, w, h, 12, fill);
+  ctx.restore();
+  ctx.strokeStyle=border; ctx.lineWidth=2;
+  roundRectStroke(ctx, x, y, w, h, 12);
+}
+function drawCheckeredFlag(ctx, x, y, width, height){
+  const cols=4, rows=3;
+  const cw=width/cols, ch=height/rows;
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      ctx.fillStyle=((r+c)%2===0)?"#fff":"#000";
+      ctx.fillRect(x + c*cw, y + r*ch, cw, ch);
+    }
+  }
+  ctx.fillStyle="#c4c7ce";
+  ctx.fillRect(x-8, y-6, 6, height+12);
+  ctx.strokeStyle="rgba(255,255,255,0.2)"; ctx.lineWidth=1.5;
+  ctx.strokeRect(x, y, width, height);
+}
+function roundRect(ctx, x, y, w, h, r, fill){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+  ctx.fillStyle=fill; ctx.fill();
+}
+function roundRectStroke(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+  ctx.stroke();
+}
+function line(ctx, x1,y1,x2,y2){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
+
+// Init
+document.getElementById("orden").value = "precioDesc";
+renderLista();
+</script>
+</body>
+</html>
